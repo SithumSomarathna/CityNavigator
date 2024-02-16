@@ -6,6 +6,13 @@ from shapely.geometry import LineString
 import pygame
 import math
 import heapq
+import pandas as pd
+
+def lanesThickness(lanes):
+    if type(lanes) == list: numLanes = max([int(x) for x in lanes])
+    elif pd.isnull(lanes): numLanes = 1
+    else: numLanes = int(lanes)
+    return (numLanes + 1) // 2
 
 def loadGraph(filename):
     graph = ox.load_graphml(filename)
@@ -14,10 +21,11 @@ def loadGraph(filename):
 
     nodes, edges = graph # These are dataframes
 
-    nodes = nodes[['street_count', 'geometry']]
-    edges = edges[['osmid', 'length', 'geometry']].sort_values(by='length')
-    edges = edges.groupby([edges.index.get_level_values(0), edges.index.get_level_values(1)]).head(1).reset_index(level=2, drop=True)
     
+    nodes = nodes[['street_count', 'geometry']]
+    edges = edges[['osmid', 'length', 'geometry', 'lanes']].sort_values(by='length')
+    edges = edges.groupby([edges.index.get_level_values(0), edges.index.get_level_values(1)]).head(1).reset_index(level=2, drop=True)
+
     return nodes, edges
 
 def calcDistance(linestring: LineString):
@@ -46,6 +54,7 @@ def transformGraph(nodes, edges, max_width, max_height, padding):
     edges['geometry'] = edges['geometry'].translate(padding, dilation * (max_y - min_y) + padding)
     # print(nodes.geometry.x.min(), nodes.geometry.y.min(), nodes.geometry.x.max(), nodes.geometry.y.max())
     edges['distance'] = edges['geometry'].apply(calcDistance)
+    edges['thickness'] = edges['lanes'].apply(lanesThickness)
     return dilation * (max_x - min_x) + 2 * padding, dilation * (max_y - min_y) + 2 * padding 
 
 
@@ -70,7 +79,7 @@ node_selection.fill(c_transparent)
 node_selection.set_colorkey(c_transparent)
 map = pygame.Surface((width, height))
 for i, edge in edges.iterrows():
-    pygame.draw.lines(map, c_white, False, list(edge['geometry'].coords))
+    pygame.draw.lines(map, c_white, False, list(edge['geometry'].coords), edge['thickness'])
 screen.blit(map, (0, 0))
 
 running = True
@@ -112,7 +121,7 @@ while running:
         node, par, dist = heapq.heappop(pq)[1]
         if node in visited: continue
         visited.add(node)
-        pygame.draw.circle(map, c_red, (nodes.loc[node].geometry.x, nodes.loc[node].geometry.y), 4)
+        if par is not None: pygame.draw.lines(map, c_red, False, list(edges.loc[(par, node)]['geometry'].coords), edges.loc[(par, node)]['thickness'] * 2)
         screen.blit(map, (0, 0))
         parent[node] = par
         if node == dest:
