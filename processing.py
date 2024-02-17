@@ -9,10 +9,10 @@ import heapq
 import pandas as pd
 
 def lanesThickness(lanes):
-    if type(lanes) == list: numLanes = max([int(x) for x in lanes])
-    elif pd.isnull(lanes): numLanes = 1
-    else: numLanes = int(lanes)
-    return (numLanes + 1) // 2
+    if type(lanes) == list: numLanes = max([float(x) for x in lanes])
+    elif pd.isnull(lanes): numLanes = 1.0
+    else: numLanes = float(lanes)
+    return int((numLanes + 1) // 2)
 
 def loadGraph(filename):
     graph = ox.load_graphml(filename)
@@ -67,19 +67,47 @@ visited = set()
 parent = dict()
 pq = []
 
+# def glowlines(surface, colour, mid_colour, points, thickness):
+#     road = pygame.Surface((width, height), pygame.SRCALPHA)
+#     c_transparent = (0, 0, 0)
+#     road.set_colorkey(c_transparent)
+#     road.fill(c_transparent)
+#     mx = 10
+    
+#     for i in range(len(points) - 1):
+#         for x in range(mx):
+#             pygame.draw.line(road, colour  + (255/(mx-1)*x,), points[i], points[i+1], thickness * (mx-x))
+#         surface.blit(road, (0, 0), special_flags=pygame.BLEND_ALPHA_SDL2)
+#         road.fill(c_transparent)
+#     for point in points:
+#         for x in range(mx):
+#             pygame.draw.circle(road, colour + (255/(mx-1)*x,), (point[0] + 1, point[1] + 1), thickness * (mx-x) / 2)
+#         surface.blit(road, (0, 0), special_flags=pygame.BLEND_ALPHA_SDL2)
+#         road.fill(c_transparent)
+#     pygame.draw.lines(road, mid_colour, False, points, 1)
+#     surface.blit(road, (0, 0), special_flags=pygame.BLEND_ALPHA_SDL2)
+
 pygame.init()
 
 c_white = (255,255,255)
+c_grey = (100, 100, 100)
 c_red = (255,0,0)
+c_lightred = (252, 88, 88)
 c_transparent = (0, 0, 0)
 
 screen = pygame.display.set_mode((width, height), pygame.SRCALPHA)
-node_selection = pygame.Surface((width, height))
+
+node_selection = pygame.Surface((width, height), pygame.SRCALPHA)
 node_selection.fill(c_transparent)
 node_selection.set_colorkey(c_transparent)
+
+path = pygame.Surface((width, height), pygame.SRCALPHA)
+path.fill(c_transparent)
+path.set_colorkey(c_transparent)
+
 map = pygame.Surface((width, height))
 for i, edge in edges.iterrows():
-    pygame.draw.lines(map, c_white, False, list(edge['geometry'].coords), edge['thickness'])
+    pygame.draw.lines(map, c_grey, False, list(edge['geometry'].coords), edge['thickness'])
 screen.blit(map, (0, 0))
 
 running = True
@@ -102,17 +130,22 @@ while running:
                     pygame.draw.circle(node_selection, c_red, (closest_point.geometry.x, closest_point.geometry.y), 4)
                 else: selected = False
                 screen.blit(map, (0, 0))
+                screen.blit(path, (0, 0))
                 screen.blit(node_selection, (0, 0))
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if selected:
                     if phase == 1:
                         start = closest_point.name
-                        pygame.draw.circle(map, c_red, (closest_point.geometry.x, closest_point.geometry.y), 4)
+                        pygame.draw.circle(path, c_red, (closest_point.geometry.x, closest_point.geometry.y), 4)
+                        node_selection.fill(c_transparent)
+                        screen.blit(path, (0, 0))
                         selected = False
                         phase = 2
                     elif phase == 2:
                         dest = closest_point.name
-                        pygame.draw.circle(map, c_red, (closest_point.geometry.x, closest_point.geometry.y), 4)
+                        pygame.draw.circle(path, c_red, (closest_point.geometry.x, closest_point.geometry.y), 4)
+                        node_selection.fill(c_transparent)
+                        screen.blit(path, (0, 0))
                         heapq.heappush(pq, (nodes.loc[start].geometry.distance(nodes.loc[dest].geometry), (start, None, 0)))
                         phase = 3
     
@@ -121,10 +154,22 @@ while running:
         node, par, dist = heapq.heappop(pq)[1]
         if node in visited: continue
         visited.add(node)
-        if par is not None: pygame.draw.lines(map, c_red, False, list(edges.loc[(par, node)]['geometry'].coords), edges.loc[(par, node)]['thickness'] * 2)
+        if par is not None: 
+            pygame.draw.lines(path, c_red, False, list(edges.loc[(par, node)]['geometry'].coords), edges.loc[(par, node)]['thickness'] * 3)
+            # glowlines(path, c_red, c_lightred, list(edges.loc[(par, node)]['geometry'].coords), 2)
         screen.blit(map, (0, 0))
+        screen.blit(path, (0, 0))
         parent[node] = par
         if node == dest:
+            path.fill(c_transparent)
+            n = dest
+            while n != start:
+                p = parent[n]
+                pygame.draw.lines(path, c_red, False, list(edges.loc[(p, n)]['geometry'].coords), edges.loc[(p, n)]['thickness'] * 3)
+                # glowlines(path, c_red, c_lightred, list(edges.loc[(p, n)]['geometry'].coords), 2)
+                n = p
+            screen.blit(map, (0, 0))
+            screen.blit(path, (0, 0))
             phase = 4
             continue
         try: edges.loc[node]
