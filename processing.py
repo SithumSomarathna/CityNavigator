@@ -7,6 +7,7 @@ import pygame
 import math
 import heapq
 import pandas as pd
+from collections import deque
 
 def lanesThickness(lanes):
     if type(lanes) == list: numLanes = max([float(x) for x in lanes])
@@ -57,6 +58,8 @@ def transformGraph(nodes, edges, max_width, max_height, padding):
     edges['thickness'] = edges['lanes'].apply(lanesThickness)
     return dilation * (max_x - min_x) + 2 * padding, dilation * (max_y - min_y) + 2 * padding 
 
+def colourInterpolation(start, end, states, cur_state):
+    return (start[0] * cur_state / states + end[0] * (states-cur_state) / states, start[1] * cur_state / states + end[1] * (states-cur_state) / states, start[2] * cur_state / states + end[2] * (states-cur_state) / states)
 
 nodes, edges = loadGraph("graph.graphml")
 width, height = transformGraph(nodes, edges, 1400, 800, 50)
@@ -91,9 +94,14 @@ pygame.init()
 
 c_white = (255,255,255)
 c_grey = (100, 100, 100)
-c_red = (255,0,0)
+
 c_lightred = (252, 88, 88)
 c_transparent = (0, 0, 0)
+
+c_start = (255,0,0)
+c_end = (100, 0, 0)
+pre_states = 9
+wait_iterations = 10
 
 screen = pygame.display.set_mode((width, height), pygame.SRCALPHA)
 
@@ -101,9 +109,23 @@ node_selection = pygame.Surface((width, height), pygame.SRCALPHA)
 node_selection.fill(c_transparent)
 node_selection.set_colorkey(c_transparent)
 
-path = pygame.Surface((width, height), pygame.SRCALPHA)
-path.fill(c_transparent)
-path.set_colorkey(c_transparent)
+main_path = pygame.Surface((width, height), pygame.SRCALPHA)
+main_path.fill(c_transparent)
+main_path.set_colorkey(c_transparent)
+
+fade_paths = []
+fade_edges = []
+for i in range(pre_states):
+    path = pygame.Surface((width, height), pygame.SRCALPHA)
+    path.fill(c_transparent)
+    path.set_colorkey(c_transparent)
+    fade_paths.append(path)
+
+    fade_edges.append(deque())
+    for j in range(wait_iterations):
+        fade_edges[i].append((None, None))
+
+
 
 map = pygame.Surface((width, height))
 for i, edge in edges.iterrows():
@@ -127,49 +149,66 @@ while running:
                 node_selection.fill(c_transparent)
                 if (start is None or closest_point.name != start) and math.dist(event.pos, (closest_point.geometry.x, closest_point.geometry.y)) <= 30:
                     selected = True
-                    pygame.draw.circle(node_selection, c_red, (closest_point.geometry.x, closest_point.geometry.y), 4)
+                    pygame.draw.circle(node_selection, c_start, (closest_point.geometry.x, closest_point.geometry.y), 4)
                 else: selected = False
                 screen.blit(map, (0, 0))
-                screen.blit(path, (0, 0))
+                screen.blit(main_path, (0, 0))
                 screen.blit(node_selection, (0, 0))
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if selected:
                     if phase == 1:
                         start = closest_point.name
-                        pygame.draw.circle(path, c_red, (closest_point.geometry.x, closest_point.geometry.y), 4)
+                        pygame.draw.circle(main_path, c_start, (closest_point.geometry.x, closest_point.geometry.y), 4)
                         node_selection.fill(c_transparent)
-                        screen.blit(path, (0, 0))
+                        screen.blit(main_path, (0, 0))
                         selected = False
                         phase = 2
                     elif phase == 2:
                         dest = closest_point.name
-                        pygame.draw.circle(path, c_red, (closest_point.geometry.x, closest_point.geometry.y), 4)
+                        pygame.draw.circle(main_path, c_start, (closest_point.geometry.x, closest_point.geometry.y), 4)
                         node_selection.fill(c_transparent)
-                        screen.blit(path, (0, 0))
+                        screen.blit(main_path, (0, 0))
                         heapq.heappush(pq, (nodes.loc[start].geometry.distance(nodes.loc[dest].geometry), (start, None, 0)))
                         phase = 3
     
     if phase == 3:
-        if len(pq) == 0: continue
+        
+        if len(pq) == 0: 
+            print("No path available")
+            break
         node, par, dist = heapq.heappop(pq)[1]
         if node in visited: continue
+        
         visited.add(node)
         if par is not None: 
-            pygame.draw.lines(path, c_red, False, list(edges.loc[(par, node)]['geometry'].coords), edges.loc[(par, node)]['thickness'] * 3)
+            fade_edges[pre_states-1].append((par, node))
+            par, node = fade_edges[0].popleft()
+            if par is not None and node is not None: pygame.draw.lines(main_path, c_end, False, list(edges.loc[(par, node)]['geometry'].coords), edges.loc[(par, node)]['thickness'] * 3)
+            for i in range(pre_states-1):
+                fade_edges[i].append(fade_edges[i+1].popleft())
+            for i in range(pre_states):
+                fade_paths[i].fill(c_transparent)
+                for edge in fade_edges[i]:
+                    par, node = edge
+                    if par is not None and node is not None: pygame.draw.lines(fade_paths[i], colourInterpolation(c_start, c_end, pre_states, i+1), False, list(edges.loc[(par, node)]['geometry'].coords), edges.loc[(par, node)]['thickness'] * 3)
             # glowlines(path, c_red, c_lightred, list(edges.loc[(par, node)]['geometry'].coords), 2)
+        
         screen.blit(map, (0, 0))
-        screen.blit(path, (0, 0))
+        screen.blit(main_path, (0, 0))
+        for i in range(pre_states-1, -1, -1):
+            screen.blit(fade_paths[i], (0, 0))
         parent[node] = par
         if node == dest:
-            path.fill(c_transparent)
+            for path in fade_paths: path.fill(c_transparent)
+            main_path.fill(c_transparent)
             n = dest
             while n != start:
                 p = parent[n]
-                pygame.draw.lines(path, c_red, False, list(edges.loc[(p, n)]['geometry'].coords), edges.loc[(p, n)]['thickness'] * 3)
+                pygame.draw.lines(main_path, c_start, False, list(edges.loc[(p, n)]['geometry'].coords), edges.loc[(p, n)]['thickness'] * 3)
                 # glowlines(path, c_red, c_lightred, list(edges.loc[(p, n)]['geometry'].coords), 2)
                 n = p
             screen.blit(map, (0, 0))
-            screen.blit(path, (0, 0))
+            screen.blit(main_path, (0, 0))
             phase = 4
             continue
         try: edges.loc[node]
