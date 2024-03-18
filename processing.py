@@ -70,26 +70,6 @@ visited = set()
 parent = dict()
 pq = []
 
-# def glowlines(surface, colour, mid_colour, points, thickness):
-#     road = pygame.Surface((width, height), pygame.SRCALPHA)
-#     c_transparent = (0, 0, 0)
-#     road.set_colorkey(c_transparent)
-#     road.fill(c_transparent)
-#     mx = 10
-    
-#     for i in range(len(points) - 1):
-#         for x in range(mx):
-#             pygame.draw.line(road, colour  + (255/(mx-1)*x,), points[i], points[i+1], thickness * (mx-x))
-#         surface.blit(road, (0, 0), special_flags=pygame.BLEND_ALPHA_SDL2)
-#         road.fill(c_transparent)
-#     for point in points:
-#         for x in range(mx):
-#             pygame.draw.circle(road, colour + (255/(mx-1)*x,), (point[0] + 1, point[1] + 1), thickness * (mx-x) / 2)
-#         surface.blit(road, (0, 0), special_flags=pygame.BLEND_ALPHA_SDL2)
-#         road.fill(c_transparent)
-#     pygame.draw.lines(road, mid_colour, False, points, 1)
-#     surface.blit(road, (0, 0), special_flags=pygame.BLEND_ALPHA_SDL2)
-
 pygame.init()
 
 c_white = (255,255,255)
@@ -191,7 +171,6 @@ while running:
                 for edge in fade_edges[i]:
                     par, node = edge
                     if par is not None and node is not None: pygame.draw.lines(fade_paths[i], colourInterpolation(c_start, c_end, pre_states, i+1), False, list(edges.loc[(par, node)]['geometry'].coords), edges.loc[(par, node)]['thickness'] * 3)
-            # glowlines(path, c_red, c_lightred, list(edges.loc[(par, node)]['geometry'].coords), 2)
         
         screen.blit(map, (0, 0))
         screen.blit(main_path, (0, 0))
@@ -204,9 +183,7 @@ while running:
             n = dest
             while n != start:
                 p = parent[n]
-                pygame.draw.lines(main_path, c_start, False, list(edges.loc[(p, n)]['geometry'].coords), edges.loc[(p, n)]['thickness'] * 3)
-                # glowlines(path, c_red, c_lightred, list(edges.loc[(p, n)]['geometry'].coords), 2)
-                n = p
+                pygame.draw.lines(main_path, c_start, False, list(edges.loc[(p, n)]['geometry'].coords), edges.loc[(p, n)]['thickness'] * 3)                n = p
             screen.blit(map, (0, 0))
             screen.blit(main_path, (0, 0))
             phase = 4
