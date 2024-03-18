@@ -12,7 +12,7 @@ Modify the place_name variable with the name of any city and run to store the gr
 
 ## Usage
 
-On the UI, click two points on the city map to start the search algorithm
+Run main.py. On the UI, click two points on the city map to start the search algorithm
 
 ## Visualisation
 
