@@ -183,7 +183,8 @@ while running:
             n = dest
             while n != start:
                 p = parent[n]
-                pygame.draw.lines(main_path, c_start, False, list(edges.loc[(p, n)]['geometry'].coords), edges.loc[(p, n)]['thickness'] * 3)                n = p
+                pygame.draw.lines(main_path, c_start, False, list(edges.loc[(p, n)]['geometry'].coords), edges.loc[(p, n)]['thickness'] * 3)                
+                n = p
             screen.blit(map, (0, 0))
             screen.blit(main_path, (0, 0))
             phase = 4
